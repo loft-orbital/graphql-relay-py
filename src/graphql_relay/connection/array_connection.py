@@ -118,9 +118,10 @@ def connection_from_array_slice(
         elif array_length is not None:
             first = array_length
         else:
-            raise ValueError(
-                "Setting argument 'after' without setting 'first' is not supported."
-            )
+            first = _calculate_array_length(array_slice)
+            # raise ValueError(
+            #     "Setting argument 'after' without setting 'first' is not supported."
+            # )
 
     if before and last is None:
         if max_limit is not None:
@@ -128,9 +129,10 @@ def connection_from_array_slice(
         elif array_length is not None:
             last = array_length
         else:
-            raise ValueError(
-                "Setting argument 'before' without setting 'last' is not supported."
-            )
+            last = _calculate_array_length(array_slice)
+            # raise ValueError(
+            #     "Setting argument 'before' without setting 'last' is not supported."
+            # )
 
     if first is None and last is None:
         if max_limit is not None:
@@ -138,7 +140,8 @@ def connection_from_array_slice(
         elif array_length is not None:
             first = array_length
         else:
-            raise ValueError("Either 'first' or 'last' must be provided.")
+            first = _calculate_array_length(array_slice)
+            # raise ValueError("Either 'first' or 'last' must be provided.")
 
     if offset:
         if after:
@@ -320,12 +323,7 @@ def _handle_last_before(
     before_offset: Optional[int] = cursor_to_offset(before) if before else None
 
     if array_length is None:
-        if isinstance(array_slice, list):
-            array_length = len(array_slice)
-        elif hasattr(array_slice, "count"):
-            array_slice.count()
-        else:
-            raise ValueError("Array slice must have a length or count method.")
+        array_length = _calculate_array_length(array_slice)
 
     end_offset: int = before_offset if before_offset is not None else array_length
     start_offset: int = max(end_offset - last, max(slice_start, 0))
@@ -353,3 +351,13 @@ def _handle_last_before(
         has_previous_page,
         has_next_page,
     )
+
+
+def _calculate_array_length(array_slice: SizedSliceable) -> int:
+    if isinstance(array_slice, list):
+        return len(array_slice)
+
+    if hasattr(array_slice, "count"):
+        return array_slice.count()
+
+    raise ValueError("Array slice must have a length or count method.")
