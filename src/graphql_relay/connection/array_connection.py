@@ -1,4 +1,4 @@
-from typing import Any, Iterator, Optional, Sequence
+from typing import Any, Iterator, Optional, Sequence, cast
 
 try:
     from typing import Protocol
@@ -79,6 +79,7 @@ def connection_from_array_slice(
     connection_type: ConnectionConstructor = Connection,
     edge_type: EdgeConstructor = Edge,
     page_info_type: PageInfoConstructor = PageInfo,
+    max_limit: Optional[int] = None,
 ) -> ConnectionType:
     """Create a connection object from a slice of the result set.
 
@@ -99,69 +100,96 @@ def connection_from_array_slice(
     we assume that the slice ends at the end of the result set.
     """
     args = args or {}
-    before = args.get("before")
-    after = args.get("after")
-    first = args.get("first")
-    last = args.get("last")
+    before: Optional[str] = args.get("before")
+    after: Optional[str] = args.get("after")
+    first: Optional[int] = args.get("first")
+    last: Optional[int] = args.get("last")
+    offset: Optional[int] = args.get("offset")
 
-    if array_slice_length is None:
-        array_slice_length = len(array_slice)
-    slice_end = slice_start + array_slice_length
-    if array_length is None:
-        # Assume that the slice covers until the end of the result set
-        array_length = slice_end
+    if first and last:
+        raise ValueError("Mixing 'first' and 'last' is not supported.")
 
-    start_offset = max(slice_start, 0)
-    end_offset = min(slice_end, array_length)
+    if before and after:
+        raise ValueError("Mixing 'before' and 'after' is not supported.")
 
-    first_edge_offset = 0
-    after_offset = get_offset_with_default(after, -1)
-    if 0 <= after_offset < array_length:
-        start_offset = max(start_offset, after_offset + 1)
-        first_edge_offset = after_offset + 1
+    if after and first is None:
+        if max_limit is not None:
+            first = max_limit
+        elif array_length is not None:
+            first = array_length
+        else:
+            raise ValueError(
+                "Setting argument 'after' without setting 'first' is not supported."
+            )
 
-    last_edge_offset = array_length - 1
-    before_offset = get_offset_with_default(before, array_length)
-    if 0 <= before_offset < array_length:
-        end_offset = min(end_offset, before_offset)
-        last_edge_offset = before_offset - 1
+    if before and last is None:
+        if max_limit is not None:
+            last = max_limit
+        elif array_length is not None:
+            last = array_length
+        else:
+            raise ValueError(
+                "Setting argument 'before' without setting 'last' is not supported."
+            )
 
-    number_edges_after_cursors = last_edge_offset - first_edge_offset + 1
+    if first is None and last is None:
+        if max_limit is not None:
+            first = max_limit
+        elif array_length is not None:
+            first = array_length
+        else:
+            raise ValueError("Either 'first' or 'last' must be provided.")
 
-    if isinstance(first, int):
-        if first < 0:
-            raise ValueError("Argument 'first' must be a non-negative integer.")
-        end_offset = min(end_offset, start_offset + first)
+    if offset:
+        if after:
+            offset += cast(int, cursor_to_offset(after)) + 1
+        # input offset starts at 1 while the graphene offset starts at 0
+        after = offset_to_cursor(offset - 1)
 
-    if isinstance(last, int):
-        if last < 0:
-            raise ValueError("Argument 'last' must be a non-negative integer.")
-        start_offset = max(start_offset, end_offset - last)
+    if first or after:
+        assert first is not None
+        (
+            edges,
+            has_previous_page,
+            has_next_page,
+        ) = _handle_first_after(
+            array_slice=array_slice,
+            first=first,
+            after=after,
+            slice_start=slice_start,
+            edge_type=edge_type,
+        )
 
-    # If supplied slice is too large, trim it down before mapping over it.
-    trimmed_slice = array_slice[start_offset - slice_start : end_offset - slice_start]
+    elif last or before:
+        assert last is not None
+        (
+            edges,
+            has_previous_page,
+            has_next_page,
+        ) = _handle_last_before(
+            array_slice=array_slice,
+            array_length=array_length,
+            last=last,
+            before=before,
+            slice_start=slice_start,
+            edge_type=edge_type,
+        )
 
-    edges = [
-        edge_type(node=value, cursor=offset_to_cursor(start_offset + index))
-        for index, value in enumerate(trimmed_slice)
-    ]
+    else:
+        (
+            edges,
+            has_previous_page,
+            has_next_page,
+        ) = _handle_first_after(
+            array_slice=array_slice,
+            first=0,
+            after=None,
+            slice_start=slice_start,
+            edge_type=edge_type,
+        )
 
-    first_edge_cursor = edges[0].cursor if edges else None
-    last_edge_cursor = edges[-1].cursor if edges else None
-
-    # Determine hasPreviousPage
-    has_previous_page = False
-    if isinstance(last, int):
-        has_previous_page = number_edges_after_cursors > last
-    elif after is not None:
-        has_previous_page = after_offset >= 0
-
-    # Determine hasNextPage
-    has_next_page = False
-    if isinstance(first, int):
-        has_next_page = number_edges_after_cursors > first
-    elif before is not None:
-        has_next_page = before_offset < array_length
+    first_edge_cursor: Optional[str] = edges[0].cursor if edges else None
+    last_edge_cursor: Optional[str] = edges[-1].cursor if edges else None
 
     return connection_type(
         edges=edges,
@@ -232,3 +260,96 @@ def get_offset_with_default(
 
     offset = cursor_to_offset(cursor)
     return default_offset if offset is None else offset
+
+
+def _handle_first_after(
+    array_slice: SizedSliceable,
+    first: int,
+    after: Optional[str],
+    slice_start: int = 0,
+    edge_type: type[Edge] = Edge,
+) -> tuple[list[Edge], bool, bool]:
+    if first < 0:
+        raise ValueError("Argument 'first' must be a non-negative integer.")
+
+    after_offset: Optional[int] = cursor_to_offset(after) if after else None
+
+    start_offset: int = max(
+        slice_start, 0 if after_offset is None else after_offset + 1
+    )
+    end_offset: int = start_offset + first
+
+    # Slice off one more than we will be returning
+    intermediate_slice: SizedSliceable = array_slice[
+        start_offset - slice_start : end_offset - slice_start + 1
+    ]
+    intermediate_slice_length: int = len(intermediate_slice)
+
+    trimmed_slice: SizedSliceable = intermediate_slice[: end_offset - start_offset]
+    trimmed_slice_length: int = len(trimmed_slice)
+
+    has_previous_page: bool = start_offset > 0
+    has_next_page: bool = intermediate_slice_length > trimmed_slice_length
+
+    edges: list[Edge] = [
+        edge_type(
+            node=node,
+            cursor=offset_to_cursor(start_offset + index),
+        )
+        for index, node in enumerate(trimmed_slice)
+    ]
+
+    return (
+        edges,
+        has_previous_page,
+        has_next_page,
+    )
+
+
+def _handle_last_before(
+    array_slice: SizedSliceable,
+    array_length: Optional[int],
+    last: int,
+    before: Optional[str],
+    slice_start: int = 0,
+    edge_type: type[Edge] = Edge,
+) -> tuple[list[Edge], bool, bool]:
+    if last < 0:
+        raise ValueError("Argument 'last' must be a non-negative integer.")
+
+    before_offset: Optional[int] = cursor_to_offset(before) if before else None
+
+    if array_length is None:
+        if isinstance(array_slice, list):
+            array_length = len(array_slice)
+        elif hasattr(array_slice, "count"):
+            array_slice.count()
+        else:
+            raise ValueError("Array slice must have a length or count method.")
+
+    end_offset: int = before_offset if before_offset is not None else array_length
+    start_offset: int = max(end_offset - last, max(slice_start, 0))
+
+    # Slice off one more than we will be returning
+    intermediate_slice: SizedSliceable = array_slice[
+        max(start_offset - slice_start - 1, 0) : end_offset - slice_start
+    ]
+
+    trimmed_slice: SizedSliceable = intermediate_slice[0 if start_offset == 0 else 1 :]
+
+    has_previous_page: bool = start_offset > 0
+    has_next_page: bool = end_offset < array_length
+
+    edges: list[Edge] = [
+        edge_type(
+            node=node,
+            cursor=offset_to_cursor(start_offset + index),
+        )
+        for index, node in enumerate(trimmed_slice)
+    ]
+
+    return (
+        edges,
+        has_previous_page,
+        has_next_page,
+    )
