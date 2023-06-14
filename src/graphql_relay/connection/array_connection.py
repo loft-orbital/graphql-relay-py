@@ -104,7 +104,6 @@ def connection_from_array_slice(
     after: Optional[str] = args.get("after")
     first: Optional[int] = args.get("first")
     last: Optional[int] = args.get("last")
-    offset: Optional[int] = args.get("offset")
 
     if first and last:
         raise ValueError("Mixing 'first' and 'last' is not supported.")
@@ -142,12 +141,6 @@ def connection_from_array_slice(
         else:
             first = _calculate_array_length(array_slice, array_slice_length)
             # raise ValueError("Either 'first' or 'last' must be provided.")
-
-    if offset:
-        if after:
-            offset += cast(int, cursor_to_offset(after)) + 1
-        # input offset starts at 1 while the graphene offset starts at 0
-        after = offset_to_cursor(offset - 1)
 
     if first is not None or after:
         assert first is not None
