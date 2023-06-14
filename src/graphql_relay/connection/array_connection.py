@@ -118,7 +118,7 @@ def connection_from_array_slice(
         elif array_length is not None:
             first = array_length
         else:
-            first = _calculate_array_length(array_slice)
+            first = _calculate_array_length(array_slice, array_slice_length)
             # raise ValueError(
             #     "Setting argument 'after' without setting 'first' is not supported."
             # )
@@ -129,7 +129,7 @@ def connection_from_array_slice(
         elif array_length is not None:
             last = array_length
         else:
-            last = _calculate_array_length(array_slice)
+            last = _calculate_array_length(array_slice, array_slice_length)
             # raise ValueError(
             #     "Setting argument 'before' without setting 'last' is not supported."
             # )
@@ -140,7 +140,7 @@ def connection_from_array_slice(
         elif array_length is not None:
             first = array_length
         else:
-            first = _calculate_array_length(array_slice)
+            first = _calculate_array_length(array_slice, array_slice_length)
             # raise ValueError("Either 'first' or 'last' must be provided.")
 
     if offset:
@@ -149,7 +149,7 @@ def connection_from_array_slice(
         # input offset starts at 1 while the graphene offset starts at 0
         after = offset_to_cursor(offset - 1)
 
-    if first or after:
+    if first is not None or after:
         assert first is not None
         (
             edges,
@@ -157,13 +157,14 @@ def connection_from_array_slice(
             has_next_page,
         ) = _handle_first_after(
             array_slice=array_slice,
+            array_length=array_length,
             first=first,
             after=after,
             slice_start=slice_start,
             edge_type=edge_type,
         )
 
-    elif last or before:
+    elif last is not None or before:
         assert last is not None
         (
             edges,
@@ -171,6 +172,7 @@ def connection_from_array_slice(
             has_next_page,
         ) = _handle_last_before(
             array_slice=array_slice,
+            array_slice_length=array_slice_length,
             array_length=array_length,
             last=last,
             before=before,
@@ -185,6 +187,7 @@ def connection_from_array_slice(
             has_next_page,
         ) = _handle_first_after(
             array_slice=array_slice,
+            array_length=array_length,
             first=0,
             after=None,
             slice_start=slice_start,
@@ -267,6 +270,7 @@ def get_offset_with_default(
 
 def _handle_first_after(
     array_slice: SizedSliceable,
+    array_length: Optional[int],
     first: int,
     after: Optional[str],
     slice_start: int = 0,
@@ -292,7 +296,18 @@ def _handle_first_after(
     trimmed_slice_length: int = len(trimmed_slice)
 
     has_previous_page: bool = start_offset > 0
-    has_next_page: bool = intermediate_slice_length > trimmed_slice_length
+
+    has_next_page: bool
+    if array_length is None:
+        has_next_page = intermediate_slice_length > trimmed_slice_length
+
+    else:
+        first_edge_offset: int = 0
+        if after_offset is not None:
+            if 0 <= after_offset < array_length:
+                first_edge_offset = after_offset + 1
+        last_edge_offset: int = array_length - 1
+        has_next_page = last_edge_offset - first_edge_offset + 1 > first
 
     edges: list[Edge] = [
         edge_type(
@@ -311,6 +326,7 @@ def _handle_first_after(
 
 def _handle_last_before(
     array_slice: SizedSliceable,
+    array_slice_length: Optional[int],
     array_length: Optional[int],
     last: int,
     before: Optional[str],
@@ -323,7 +339,7 @@ def _handle_last_before(
     before_offset: Optional[int] = cursor_to_offset(before) if before else None
 
     if array_length is None:
-        array_length = _calculate_array_length(array_slice)
+        array_length = _calculate_array_length(array_slice, array_slice_length)
 
     end_offset: int = before_offset if before_offset is not None else array_length
     start_offset: int = max(end_offset - last, max(slice_start, 0))
@@ -353,11 +369,17 @@ def _handle_last_before(
     )
 
 
-def _calculate_array_length(array_slice: SizedSliceable) -> int:
+def _calculate_array_length(
+    array_slice: SizedSliceable,
+    array_slice_length: Optional[int],
+) -> int:
+    if array_slice_length is not None:
+        return array_slice_length
+
     if isinstance(array_slice, list):
         return len(array_slice)
 
     if hasattr(array_slice, "count"):
         return array_slice.count()
 
-    raise ValueError("Array slice must have a length or count method.")
+    return len(array_slice)
