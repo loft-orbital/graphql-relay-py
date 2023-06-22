@@ -289,10 +289,13 @@ def _handle_first_after(
         intermediate_slice: SizedSliceable = array_slice[
             start_offset - slice_start : end_offset - slice_start + 1
         ]
+        # Keep intermediate `intermediate_slice_length` variable to force QuerySet evaluation.
+        intermediate_slice_length: int = len(intermediate_slice)
 
         trimmed_slice = intermediate_slice[: end_offset - start_offset]
+        trimmed_slice_length: int = len(trimmed_slice)
 
-        has_next_page = len(intermediate_slice) > len(trimmed_slice)
+        has_next_page = intermediate_slice_length > trimmed_slice_length
 
     else:
         trimmed_slice = array_slice[
