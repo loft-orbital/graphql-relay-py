@@ -1,4 +1,4 @@
-from typing import Any, Iterator, Optional, Sequence
+from typing import Any, Iterator, Optional, Sequence, Type
 
 try:
     from typing import Protocol
@@ -250,7 +250,7 @@ def _handle_first_after(
     first: Optional[int],
     after: Optional[str],
     slice_start: int = 0,
-    edge_type: type[Edge] = Edge,
+    edge_type: Type[Edge] = Edge,
 ) -> tuple[list[Edge], bool, bool]:
     """Handle the `first` and `after` arguments."""
     if first is not None and first < 0:
@@ -339,7 +339,7 @@ def _handle_last_before(
     last: Optional[int],
     before: Optional[str],
     slice_start: int = 0,
-    edge_type: type[Edge] = Edge,
+    edge_type: Type[Edge] = Edge,
 ) -> tuple[list[Edge], bool, bool]:
     """Handle the `last` and `before` arguments."""
 
