@@ -1,4 +1,4 @@
-from typing import Any, Iterator, Optional, Sequence, Type
+from typing import Any, Iterator, List, Tuple, Optional, Sequence, Type
 
 try:
     from typing import Protocol
@@ -251,7 +251,7 @@ def _handle_first_after(
     after: Optional[str],
     slice_start: int = 0,
     edge_type: Type[Edge] = Edge,
-) -> tuple[list[Edge], bool, bool]:
+) -> Tuple[List[Edge], bool, bool]:
     """Handle the `first` and `after` arguments."""
     if first is not None and first < 0:
         raise ValueError("Argument 'first' must be a non-negative integer.")
@@ -317,7 +317,7 @@ def _handle_first_after(
         if after_offset > array_length:
             has_previous_page = True
 
-    edges: list[Edge] = [
+    edges: List[Edge] = [
         edge_type(
             node=node,
             cursor=offset_to_cursor(start_offset + index),
@@ -340,7 +340,7 @@ def _handle_last_before(
     before: Optional[str],
     slice_start: int = 0,
     edge_type: Type[Edge] = Edge,
-) -> tuple[list[Edge], bool, bool]:
+) -> Tuple[List[Edge], bool, bool]:
     """Handle the `last` and `before` arguments."""
 
     if last is not None and last < 0:
@@ -384,7 +384,7 @@ def _handle_last_before(
     if before_offset is not None and before_offset < 0:
         has_next_page = True
 
-    edges: list[Edge] = [
+    edges: List[Edge] = [
         edge_type(
             node=node,
             cursor=offset_to_cursor(start_offset + index),
