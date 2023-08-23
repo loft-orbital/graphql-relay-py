@@ -23,7 +23,6 @@ __all__ = [
     "connection_from_array_slice",
     "cursor_for_object_in_connection",
     "cursor_to_offset",
-    "get_offset_with_default",
     "offset_to_cursor",
     "SizedSliceable",
 ]
@@ -79,7 +78,6 @@ def connection_from_array_slice(
     connection_type: ConnectionConstructor = Connection,
     edge_type: EdgeConstructor = Edge,
     page_info_type: PageInfoConstructor = PageInfo,
-    max_limit: Optional[int] = None,
 ) -> ConnectionType:
     """Create a connection object from a slice of the result set.
 
@@ -105,42 +103,44 @@ def connection_from_array_slice(
     first: Optional[int] = args.get("first")
     last: Optional[int] = args.get("last")
 
+    # Possible combinations are:
+    # - first and after
+    # - last and before
+
     if first and last:
         raise ValueError("Mixing 'first' and 'last' is not supported.")
 
     if before and after:
         raise ValueError("Mixing 'before' and 'after' is not supported.")
 
+    if first and before:
+        raise ValueError("Mixing 'first' and 'before' is not supported.")
+
+    if last and after:
+        raise ValueError("Mixing 'last' and 'after' is not supported.")
+
     # If the `array_slice_length` is provided, use it as `array_length`.
     if array_slice_length is not None:
         array_length = array_slice_length
 
     # If `after` is provided, but `first` is not, or if `first` and `last` are not provided at all,
-    # calculate `first` by using the `max_limit`, `array_length`, `array_slice_length` (in this order, if provided),
+    # calculate `first` by using the `array_length`
     # or fall back to calculating the array length (which can be an expensive operation, hence being the last resort).
     if first is None and (after or last is None):
-        if max_limit is not None:
-            first = max_limit
-        elif array_length is not None:
+        if array_length is not None:
             first = array_length
         else:
-            array_length = _calculate_array_length(array_slice, array_slice_length)
+            array_length = len(array_slice)
             first = array_length
 
     # If `before` is provided, but `last` is not,
-    # calculate `last` by using the `max_limit`, `array_length`, `array_slice_length` (in this order, if provided),
+    # calculate `last` by using the `array_length`
     # or fall back to calculating the array length (which can be an expensive operation, hence being the last resort).
     if last is None and before:
-        if max_limit is not None:
-            last = max_limit
-        elif array_length is not None:
-            last = array_length
-        else:
-            array_length = _calculate_array_length(array_slice, array_slice_length)
-            last = array_length
+        last = array_length
 
-    # If `last` or `before` are provided
-    if last is not None or before:
+    # If `last` or `before` were provided
+    if last is not None:
         (
             edges,
             has_previous_page,
@@ -226,22 +226,6 @@ def cursor_for_object_in_connection(
         return None
     else:
         return offset_to_cursor(offset)
-
-
-def get_offset_with_default(
-    cursor: Optional[ConnectionCursor] = None, default_offset: int = 0
-) -> int:
-    """Get offset from a given cursor and a default.
-
-    Given an optional cursor and a default offset, return the offset to use;
-    if the cursor contains a valid offset, that will be used,
-    otherwise it will be the default.
-    """
-    if not isinstance(cursor, str):
-        return default_offset
-
-    offset = cursor_to_offset(cursor)
-    return default_offset if offset is None else offset
 
 
 def _handle_first_after(
@@ -351,7 +335,7 @@ def _handle_last_before(
 
     # If the length of the array is not provided, calculate it.
     if array_length is None:
-        array_length = _calculate_array_length(array_slice, array_slice_length)
+        array_length = len(array_slice)
 
     # Calculate the `end_offset`:
     # If `before` is provided, use it as `end_offset` (cropping it to the bounds of the slice).
@@ -364,15 +348,9 @@ def _handle_last_before(
         end_offset = array_length
 
     # Calculate the `start_offset`:
-    # If `last` is provided, use it to calculate the `start_offset` by subtracting it from the `end_offset`,
+    # `last` is used it to calculate the `start_offset` by subtracting it from the `end_offset`,
     # ensuring that it is greater than or equal to zero, or to the start of slice (whichever is greater).
-    # Otherwise, the `start_offset` is the start of the slice.
-    start_offset: int
-    if last is not None:
-        start_offset = max(end_offset - last, max(slice_start, 0))
-
-    else:
-        start_offset = 0
+    start_offset: int = max(end_offset - last, max(slice_start, 0))
 
     trimmed_slice: SizedSliceable = array_slice[
         start_offset - slice_start : end_offset - slice_start
@@ -397,25 +375,3 @@ def _handle_last_before(
         has_previous_page,
         has_next_page,
     )
-
-
-def _calculate_array_length(
-    array_slice: SizedSliceable,
-    array_slice_length: Optional[int],
-) -> int:
-    """Calculate the length of the array.
-
-    If `array_slice_length` is provided, use it.
-    Otherwise, if `array_slice` is a list, use `len(array_slice)`.
-    Otherwise, if `array_slice` has a `count` method, use `array_slice.count()`.
-    Otherwise, use `len(array_slice)`."""
-    if array_slice_length is not None:
-        return array_slice_length
-
-    if isinstance(array_slice, list):
-        return len(array_slice)
-
-    if hasattr(array_slice, "count"):
-        return array_slice.count()
-
-    return len(array_slice)

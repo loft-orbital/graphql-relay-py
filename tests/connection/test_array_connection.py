@@ -325,6 +325,14 @@ def describe_connection_from_array():
                 ),
             )
 
+        def forbids_before_and_after():
+            with pytest.raises(ValueError) as exc_info:
+                connection_from_array_slice(
+                    array_abcde,
+                    dict(before=cursor_c, after=cursor_a),
+                )
+            assert str(exc_info.value) == "Mixing 'before' and 'after' is not supported."
+
         @pytest.mark.skip(reason="Using before and after should not be supported.")
         def respects_first_and_after_and_before_too_few():
             c = connection_from_array(
@@ -508,6 +516,14 @@ def describe_connection_from_array():
                 ),
             )
 
+        def forbids_first_and_last():
+            with pytest.raises(ValueError) as exc_info:
+                connection_from_array_slice(
+                    array_abcde,
+                    dict(first=2, last=1),
+                )
+            assert str(exc_info.value) == "Mixing 'first' and 'last' is not supported."
+
         @pytest.mark.skip(reason="Using first and before should not be supported.")
         def respects_first_and_before():
             c = connection_from_array_slice(
@@ -552,6 +568,14 @@ def describe_connection_from_array():
                 ),
             )
 
+        def forbids_first_and_before():
+            with pytest.raises(ValueError) as exc_info:
+                connection_from_array_slice(
+                    array_abcde,
+                    dict(first=2, before=cursor_c),
+                )
+            assert str(exc_info.value) == "Mixing 'first' and 'before' is not supported."
+
         @pytest.mark.skip(reason="Using last and after should not be supported.")
         def respects_last_and_after():
             c = connection_from_array_slice(
@@ -595,6 +619,14 @@ def describe_connection_from_array():
                     hasNextPage=False,
                 ),
             )
+
+        def forbids_last_and_after():
+            with pytest.raises(ValueError) as exc_info:
+                connection_from_array_slice(
+                    array_abcde,
+                    dict(last=2, after=cursor_c),
+                )
+            assert str(exc_info.value) == "Mixing 'last' and 'after' is not supported."
 
     def describe_cursor_edge_cases():
         def throws_an_error_if_first_smaller_than_zero():
