@@ -1,4 +1,4 @@
-from typing import Any, Iterator, List, Tuple, Optional, Sequence, Type
+from typing import Any, Iterator, List, Tuple, Optional, Sequence
 
 try:
     from typing import Protocol
@@ -142,11 +142,7 @@ def connection_from_array_slice(
 
     # If `last` or `before` were provided
     if last is not None:
-        (
-            edges,
-            has_previous_page,
-            has_next_page,
-        ) = _handle_last_before(
+        (edges, has_previous_page, has_next_page,) = _handle_last_before(
             array_slice=array_slice,
             array_length=array_length,
             last=last,
@@ -158,11 +154,7 @@ def connection_from_array_slice(
     # If `first` or `after` are provided
     else:
         assert first is not None
-        (
-            edges,
-            has_previous_page,
-            has_next_page,
-        ) = _handle_first_after(
+        (edges, has_previous_page, has_next_page,) = _handle_first_after(
             array_slice=array_slice,
             array_length=array_length,
             first=first,

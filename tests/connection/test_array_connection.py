@@ -331,7 +331,9 @@ def describe_connection_from_array():
                     array_abcde,
                     dict(before=cursor_c, after=cursor_a),
                 )
-            assert str(exc_info.value) == "Mixing 'before' and 'after' is not supported."
+            assert (
+                str(exc_info.value) == "Mixing 'before' and 'after' is not supported."
+            )
 
         @pytest.mark.skip(reason="Using before and after should not be supported.")
         def respects_first_and_after_and_before_too_few():
@@ -574,7 +576,9 @@ def describe_connection_from_array():
                     array_abcde,
                     dict(first=2, before=cursor_c),
                 )
-            assert str(exc_info.value) == "Mixing 'first' and 'before' is not supported."
+            assert (
+                str(exc_info.value) == "Mixing 'first' and 'before' is not supported."
+            )
 
         @pytest.mark.skip(reason="Using last and after should not be supported.")
         def respects_last_and_after():
