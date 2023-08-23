@@ -13,6 +13,7 @@ from .connection import (
     ConnectionCursor,
     ConnectionType,
     Edge,
+    EdgeType,
     EdgeConstructor,
     PageInfo,
     PageInfoConstructor,
@@ -147,7 +148,6 @@ def connection_from_array_slice(
             has_next_page,
         ) = _handle_last_before(
             array_slice=array_slice,
-            array_slice_length=array_slice_length,
             array_length=array_length,
             last=last,
             before=before,
@@ -157,6 +157,7 @@ def connection_from_array_slice(
 
     # If `first` or `after` are provided
     else:
+        assert first is not None
         (
             edges,
             has_previous_page,
@@ -231,11 +232,11 @@ def cursor_for_object_in_connection(
 def _handle_first_after(
     array_slice: SizedSliceable,
     array_length: Optional[int],
-    first: Optional[int],
+    first: int,
     after: Optional[str],
     slice_start: int = 0,
-    edge_type: Type[Edge] = Edge,
-) -> Tuple[List[Edge], bool, bool]:
+    edge_type: EdgeConstructor = Edge,
+) -> Tuple[List[EdgeType], bool, bool]:
     """Handle the `first` and `after` arguments."""
     if first is not None and first < 0:
         raise ValueError("Argument 'first' must be a non-negative integer.")
@@ -296,12 +297,12 @@ def _handle_first_after(
     # If the start offset is greater than zero, there is a previous page.
     # However, if the provided `after` cursor is outside the bounds of the slice,
     # enforce that `has_previous_page` is `True`.
-    has_previous_page: bool = start_offset > 0
+    has_previous_page = start_offset > 0
     if array_length is not None and after_offset is not None:
         if after_offset > array_length:
             has_previous_page = True
 
-    edges: List[Edge] = [
+    edges = [
         edge_type(
             node=node,
             cursor=offset_to_cursor(start_offset + index),
@@ -318,13 +319,12 @@ def _handle_first_after(
 
 def _handle_last_before(
     array_slice: SizedSliceable,
-    array_slice_length: Optional[int],
     array_length: Optional[int],
-    last: Optional[int],
+    last: int,
     before: Optional[str],
     slice_start: int = 0,
-    edge_type: Type[Edge] = Edge,
-) -> Tuple[List[Edge], bool, bool]:
+    edge_type: EdgeConstructor = Edge,
+) -> Tuple[List[EdgeType], bool, bool]:
     """Handle the `last` and `before` arguments."""
 
     if last is not None and last < 0:
@@ -362,7 +362,7 @@ def _handle_last_before(
     if before_offset is not None and before_offset < 0:
         has_next_page = True
 
-    edges: List[Edge] = [
+    edges = [
         edge_type(
             node=node,
             cursor=offset_to_cursor(start_offset + index),
