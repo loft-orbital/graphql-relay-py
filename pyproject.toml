@@ -66,6 +66,9 @@ tox = "^3.24"
 [tool.black]
 target-version = ['py36', 'py37', 'py38', 'py39', 'py310']
 
+[tool.check-manifest]
+ignore = ["setup.py"]
+
 [build-system]
 requires = ["poetry_core>=1,<2", "setuptools>=59,<70"]
 build-backend = "poetry.core.masonry.api"
